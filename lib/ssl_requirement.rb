@@ -27,60 +27,54 @@ module SslRequirement
     controller.extend(ClassMethods)
     controller.before_filter(:ensure_proper_protocol)
   end
-
+  
   def self.disable_ssl_check?
     @@disable_ssl_check ||= false
   end
-
+  
   def self.disable_ssl_check=(value)
     @@disable_ssl_check = value
   end
-
+  
   module ClassMethods
     # Specifies that the named actions requires an SSL connection to be performed (which is enforced by ensure_proper_protocol).
     def ssl_required(*actions)
       write_inheritable_array(:ssl_required_actions, actions)
     end
-
-    def ssl_exceptions(*actions)
-      write_inheritable_array(:ssl_required_except_actions, actions)
-    end
-
+    
     def ssl_allowed(*actions)
       write_inheritable_array(:ssl_allowed_actions, actions)
     end
   end
-
+  
   protected
-    # Returns true if the current action is supposed to run as SSL
-    def ssl_required?
-      required = (self.class.read_inheritable_attribute(:ssl_required_actions) || [])
-      except  = self.class.read_inheritable_attribute(:ssl_required_except_actions)
-
-      unless except
-        required.include?(action_name.to_sym)
-      else
-        !except.include?(action_name.to_sym)
-      end
-    end
-
-    def ssl_allowed?
-      (self.class.read_inheritable_attribute(:ssl_allowed_actions) || []).include?(action_name.to_sym)
-    end
-
+  
+  # Returns true if the current action is supposed to run as SSL
+  def ssl_required?
+    actions = self.class.read_inheritable_attribute(:ssl_required_actions)
+    actions && (actions.empty? || actions.include?(action_name.to_sym))
+  end
+  
+  def ssl_allowed?
+    actions = self.class.read_inheritable_attribute(:ssl_allowed_actions)
+    actions && (actions.empty? || actions.include?(action_name.to_sym))
+  end
+  
   private
-    def ensure_proper_protocol
-      return true if SslRequirement.disable_ssl_check?
-      return true if ssl_allowed?
+  
+  def ensure_proper_protocol
+    return true if SslRequirement.disable_ssl_check?
+    return true if ssl_allowed?
 
-      if ssl_required? && !request.ssl?
-        redirect_to "https://" + (ssl_host || request.host) + request.request_uri
-        flash.keep
-        return false
-      elsif request.ssl? && !ssl_required?
-        redirect_to "http://" + (non_ssl_host || request.host) + request.request_uri
-        flash.keep
-        return false
-      end
+    if ssl_required? && !request.ssl?
+      redirect_to "https://" + (ssl_host || request.host) + request.request_uri
+      flash.keep
+      return false
+    elsif request.ssl? && !ssl_required?
+      redirect_to "http://" + (non_ssl_host || request.host) + request.request_uri
+      flash.keep
+      return false
     end
+  end
+  
 end
